@@ -30,7 +30,8 @@ class Delete extends CommandAbstract
      *
      * @throws \xobotyi\beansclient\Exception\Command
      */
-    public function __construct(int $jobId) {
+    public function __construct(int $jobId)
+    {
         if ($jobId <= 0) {
             throw new Exception\Command('Job id must be a positive integer');
         }
@@ -43,7 +44,8 @@ class Delete extends CommandAbstract
     /**
      * @return string
      */
-    public function getCommandStr() :string {
+    public function getCommandStr() :string
+    {
         return $this->commandName . ' ' . $this->jobId;
     }
 
@@ -54,14 +56,13 @@ class Delete extends CommandAbstract
      * @return bool
      * @throws \xobotyi\beansclient\Exception\Command
      */
-    public function parseResponse(array $responseHeader, ?string $responseStr) :bool {
+    public function parseResponse(array $responseHeader, ?string $responseStr) :bool
+    {
         if ($responseStr) {
             throw new Exception\Command("Unexpected response data passed");
-        }
-        else if ($responseHeader[0] === Response::DELETED) {
+        } elseif ($responseHeader[0] === Response::DELETED) {
             return true;
-        }
-        else if ($responseHeader[0] === Response::NOT_FOUND) {
+        } elseif ($responseHeader[0] === Response::NOT_FOUND) {
             return false;
         }
 
