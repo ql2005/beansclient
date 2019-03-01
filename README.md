@@ -25,8 +25,16 @@
         <img alt="Total Downloads" src="https://poser.pugx.org/xobotyi/beansclient/downloads" />
     </a>
 </p>
-
 ## About
+
+
+
+forked from [xobotyi/beansclient](https://github.com/xobotyi/beansclient)      
+
+✨ Replace Socket client for Swoole\Coroutine\Client
+
+
+
 BeansClient is a pure 7.1+ dependency-free client for [beanstalkd work queue](https://github.com/kr/beanstalkd) with thorough unit-testing. Library uses PSR-4 autoloader standard and always has 100% tests coverage.    
 Library gives you a simple way to provide your own Connection implementation, in cases when you need to log requests and responses or to proxy traffic to non-standard transport. 
 
@@ -57,9 +65,10 @@ It became the main reason why i wrote beansclient.
 <br>
 
 ## Requirements
-- [PHP](//php.net/) 7.1+
+- [PHP](//php.net/) 7.1+ CLI
 - [beanstalkd](//github.com/kr/beanstalkd/) 1.10+
-<br>
+- [swoole](//github.com/swoole/swoole-src/) 4.2.9+
+  <br>
 
 ## Installation
 Install with composer
@@ -88,19 +97,23 @@ $beansClient->useTube('myAwesomeTube')
 #    WORKER    #
 ##            ##
 
-$job = $beansClient->watchTube('myAwesomeTube')
-                   ->reserve();
+$beansClient->watchTube('myAwesomeTube');
 
-if ($job->id) {
-    echo "Hey, i received first {$job->payload} of job with id {$job->id}\n";
+swoole_timer_tick(500, function() use ($beansClient){
+    $job = $beansClient->reserve();
 
-    $job->delete();
+    if ($job->id) {
+        echo "Hey, i received first {$job->payload} of job with id {$job->id}\n";
 
-    echo "And i've done it!\n";
-}
-else {
-    echo "So sad, i have nothing to do";
-}
+        $job->delete();
+
+        echo "And i've done it!\n";
+    }
+    else {
+        echo "So sad, i have nothing to do";
+    }
+});
+
 
 echo "Am I still connected? \n" . ($beansClient->getConnection()->isActive() ? 'Yes' : 'No') . "\n";
 ```
@@ -203,14 +216,14 @@ Inserts a job into the client's currently used tube (see the "useTube")
 
 _**Return value:**_  
 `\xobotyi\beansclient\Job` instance  
- 
+
 _**Example:**_  
 ```php
 $client->put('myAwesomePayload', 2048, 0, 60)->payload; // myAwesomePayload
 # or, if we use payload encoder 
 $client->put(['it'=>'can be any', 'thing'], 2048, 0, 60)->id; //2
 ```
-    
+
 #### `reserve([?int $timeout])`
 Returns a newly-reserved job. Once a job is reserved for the client, the client has limited time to run (TTR) the job before the job times out. When the job times out, the server will put the job back into the ready queue. Both the TTR and the actual time left can be found in response to the statsJob command.
 If more than one job is ready, beanstalkd will choose the one with the smallest priority value. Within each priority, it will choose the one that was received first.  
