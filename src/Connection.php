@@ -7,7 +7,7 @@
 
 namespace xobotyi\beansclient;
 
-use swoole\Coroutine\Client;
+use swoole\Client;
 use xobotyi\beansclient\Command\Stats;
 use xobotyi\beansclient\Command\IgnoreTube;
 
@@ -52,6 +52,12 @@ class Connection extends SocketFunctions implements Interfaces\Connection
 
         $this->socket = new Client(SWOOLE_SOCK_TCP);
 
+        $this->socket->set([
+            'open_eof_check' => true,
+            'package_eof' => self::CRLF,
+            'package_max_length' => 1024 * 1024 * 256,
+        ]);
+
         if (! $this->socket->connect($this->host, $this->port, $this->timeout)) {
             $this->socket = null;
             throw new Exception\Connection(0, 'beanstalk connection error');
@@ -64,7 +70,7 @@ class Connection extends SocketFunctions implements Interfaces\Connection
     public function reConnection()
     {
         $this->socket->close();
-        $this->socket->connect($this->host, $this->port, $this->timeout);
+        return $this->socket->connect($this->host, $this->port, $this->timeout);
     }
 
     public function __destruct()
@@ -141,7 +147,8 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         }
 
         $str = $this->socket->recv();
-        return rtrim($str);
+        $str = str_replace(self::CRLF, '', $str);
+        return $str;
     }
 
     /**
@@ -169,20 +176,15 @@ class Connection extends SocketFunctions implements Interfaces\Connection
             throw new Exception\Connection(0, "Unable to write into closed connection");
         }
 
-        try {
-            $send = $this->socket->send($str);
+        $send = $this->socket->send($str);
 
-            if (! $send && $this->reConnection()) {
-                $send = $this->socket->send($str);
-                if (! $send) {
-                    throw new Exception\Socket(0, 'beanstalk send fail: ' . $this->socket->errCode);
-                }
+        if (! $send) {
+            if (! $this->reConnection()) {
+                throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
             }
-        } catch (\Exception $e) {
-            $this->reConnection();
             $send = $this->socket->send($str);
             if (! $send) {
-                throw new Exception\Socket(0, 'beanstalk send fail: ' . $this->socket->errCode);
+                throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
             }
         }
     }

@@ -30,7 +30,8 @@ class UseTube extends CommandAbstract
      *
      * @throws \xobotyi\beansclient\Exception\Command
      */
-    public function __construct(string $tube) {
+    public function __construct(string $tube)
+    {
         if (!($tube = trim($tube))) {
             throw new Exception\Command('Tube name must be a valuable string');
         }
@@ -43,7 +44,8 @@ class UseTube extends CommandAbstract
     /**
      * @return string
      */
-    public function getCommandStr() :string {
+    public function getCommandStr() :string
+    {
         return $this->commandName . ' ' . $this->tube;
     }
 
@@ -54,11 +56,11 @@ class UseTube extends CommandAbstract
      * @return string
      * @throws \xobotyi\beansclient\Exception\Command
      */
-    public function parseResponse(array $responseHeader, ?string $responseStr) :string {
+    public function parseResponse(array $responseHeader, ?string $responseStr) :string
+    {
         if ($responseStr) {
             throw new Exception\Command("Unexpected response data passed");
-        }
-        else if ($responseHeader[0] !== Response::USING) {
+        } elseif ($responseHeader[0] !== Response::USING) {
             throw new Exception\Command("Got unexpected status code [${responseHeader[0]}]");
         }
 

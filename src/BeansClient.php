@@ -10,7 +10,6 @@ namespace xobotyi\beansclient;
 use xobotyi\beansclient\Command;
 use xobotyi\beansclient\Exception;
 use xobotyi\beansclient\Interfaces;
-use Wailian\SdExtends\CoreBase\ExceptionHandle;
 
 /**
  * Class BeansClient
@@ -92,35 +91,26 @@ class BeansClient
 
         $this->connection->write($request);
 
-        $response = explode(' ', $this->connection->read());
+        $responseHeader = explode(' ', $this->connection->read());
 
         // throwing exception if there is an error response
-        if (in_array($response[0], Response::ERROR_RESPONSES)) {
-            throw new Exception\Job("Got {$response[0]} in response to {$cmd->getCommandStr()}");
+        if (in_array($responseHeader[0], Response::ERROR_RESPONSES)) {
+            throw new Exception\Job("Got {$responseHeader[0]} in response to {$cmd->getCommandStr()}");
         }
 
         // if request contains data - read it
-        if (in_array($response[0], Response::DATA_RESPONSES)) {
-            if (count($response) === 1) {
+        if (in_array($responseHeader[0], Response::DATA_RESPONSES)) {
+            if (count($responseHeader) === 1) {
                 throw new Exception\Client("Got no data length in response to {$cmd->getCommandStr()} ["
-                    . implode(' ', $response) . "]");
+                    . implode(' ', $responseHeader) . "]");
             }
 
-            $data = $response[count($response) - 1];
-            $data = explode(self::CRLF, $data);
-            $data = $data[1];
+            $data = $this->connection->read();
         } else {
-            foreach ($response as $key => $value) {
-                $response[$key] = str_replace(self::CRLF, '', $value);
-            }
             $data = null;
         }
 
-        try {
-            return $cmd->parseResponse($response, $data);
-        } catch (\Exception $e) {
-            new ExceptionHandle($e);
-        }
+        return $cmd->parseResponse($responseHeader, $data);
     }
 
     /**
