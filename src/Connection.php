@@ -64,15 +64,6 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         }
     }
 
-    /**
-     * reConnection beanstalk
-     */
-    public function reConnection()
-    {
-        $this->socket->close();
-        return $this->socket->connect($this->host, $this->port, $this->timeout);
-    }
-
     public function __destruct()
     {
         $this->socket->close();
@@ -176,16 +167,32 @@ class Connection extends SocketFunctions implements Interfaces\Connection
             throw new Exception\Connection(0, "Unable to write into closed connection");
         }
 
-        $send = $this->socket->send($str);
+        try {
+            $send = $this->socket->send($str);
+        } catch (\Exception $e) {
+            $this->reConnection();
+            $send = $this->socket->send($str);
+        }
 
         if (! $send) {
-            if (! $this->reConnection()) {
-                throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
-            }
+            $this->reConnection();
             $send = $this->socket->send($str);
             if (! $send) {
                 throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
             }
         }
+    }
+
+    /**
+     * reConnection beanstalk
+     */
+    public function reConnection()
+    {
+        $this->socket->close();
+        $reconn = $this->socket->connect($this->host, $this->port, $this->timeout);
+        if (! $reconn) {
+            throw new Exception\Socket('beanstalk connect fail: ' . $this->socket->errCode);
+        }
+        return $reconn;
     }
 }
