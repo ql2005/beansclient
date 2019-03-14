@@ -205,18 +205,12 @@ class Connection extends SocketFunctions implements Interfaces\Connection
      */
     public function isReconn(): bool
     {
-        return $this->isReConnection;
-    }
+        if ($this->isReConnection === true) {
+            // reset
+            $this->isReConnection = false;
+            return true;
+        }
 
-    /**
-     * reset isReConnection false
-     *
-     * @return self
-     * @date 2019-03-12
-     */
-    public function clearReconn(): self
-    {
-        $this->isReConnection = false;
-        return $this;
+        return false;
     }
 }
