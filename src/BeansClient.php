@@ -91,7 +91,9 @@ class BeansClient
 
         $this->connection->write($request);
 
-        $responseHeader = explode(' ', $this->connection->read());
+        $responseHeader = $this->connection->read();
+        $responseHeader = str_replace(self::CRLF, '', $responseHeader);
+        $responseHeader = explode(' ', $responseHeader);
 
         // throwing exception if there is an error response
         if (in_array($responseHeader[0], Response::ERROR_RESPONSES)) {
@@ -106,6 +108,7 @@ class BeansClient
             }
 
             $data = $this->connection->read();
+            $data = str_replace(self::CRLF, '', $data);
         } else {
             $data = null;
         }

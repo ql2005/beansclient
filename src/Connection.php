@@ -28,6 +28,7 @@ class Connection extends SocketFunctions implements Interfaces\Connection
     private $port;
     private $socket;
     private $timeout;
+    private $isReConnection = false;
 
     /**
      * Connection constructor.
@@ -55,7 +56,7 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         $this->socket->set([
             'open_eof_check' => true,
             'package_eof' => self::CRLF,
-            'package_max_length' => 1024 * 1024 * 256,
+            'package_max_length' => 1024 * 1024 * 2,
         ]);
 
         if (! $this->socket->connect($this->host, $this->port, $this->timeout)) {
@@ -138,7 +139,6 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         }
 
         $str = $this->socket->recv();
-        $str = str_replace(self::CRLF, '', $str);
         return $str;
     }
 
@@ -193,6 +193,30 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         if (! $reconn) {
             throw new Exception\Socket('beanstalk connect fail: ' . $this->socket->errCode);
         }
+        $this->isReConnection = true;
         return $reconn;
+    }
+
+    /**
+     * when socket reconnection return true
+     *
+     * @return boolean
+     * @date 2019-03-12
+     */
+    public function isReconn(): bool
+    {
+        return $this->isReConnection;
+    }
+
+    /**
+     * reset isReConnection false
+     *
+     * @return self
+     * @date 2019-03-12
+     */
+    public function clearReconn(): self
+    {
+        $this->isReConnection = false;
+        return $this;
     }
 }
