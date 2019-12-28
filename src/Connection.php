@@ -51,24 +51,45 @@ class Connection extends SocketFunctions implements Interfaces\Connection
         $this->timeout    = $connectionTimeout === null ? self::SOCK_CONNECTION_TIMEOUT : $connectionTimeout;
         $this->persistent = $persistent;
 
-        $this->socket = new Client(SWOOLE_SOCK_TCP);
+        if (PHP_SAPI == "cli") {
+            $this->socket = new Client(SWOOLE_SOCK_TCP);
+            $this->socket->set([
+                'open_eof_check' => true,
+                'package_eof' => self::CRLF,
+                'package_max_length' => 1024 * 1024 * 2,
+            ]);
 
-        $this->socket->set([
-            'open_eof_check' => true,
-            'package_eof' => self::CRLF,
-            'package_max_length' => 1024 * 1024 * 2,
-        ]);
+            if (! $this->socket->connect($this->host, $this->port, $this->timeout)) {
+                $this->socket = null;
+                throw new Exception\Connection(0, 'beanstalk connection error');
+            }
+        } else {
+            $this->socket = $persistent
+            ? $this->pfsockopen($this->host, $this->port, $errNo, $errStr, $this->timeout)
+            : $this->fsockopen($this->host, $this->port, $errNo, $errStr, $this->timeout);
 
-        if (! $this->socket->connect($this->host, $this->port, $this->timeout)) {
-            $this->socket = null;
-            throw new Exception\Connection(0, 'beanstalk connection error');
+            if (!$this->socket) {
+                throw new Exception\Connection($errNo, $errStr . " (while connecting to {$this->host}:{$this->port})");
+            }
+
+            $this->setReadTimeout($this->socket, self::SOCK_READ_TIMEOUT);
         }
     }
 
     public function __destruct()
     {
-        $this->socket->close();
-        $this->socket = null;
+        if (PHP_SAPI == "cli") {
+            $this->socket->close();
+            $this->socket = null;
+        } else {
+            if (!$this->persistent) {
+                if (!$this->fclose($this->socket)) {
+                    throw new Exception\Connection(0, "Unable to close connection");
+                }
+
+                $this->socket = null;
+            }
+        }
     }
 
     /**
@@ -134,12 +155,16 @@ class Connection extends SocketFunctions implements Interfaces\Connection
      */
     public function read() :string
     {
-        if (!$this->socket) {
-            throw new Exception\Connection(0, "Unable to read from closed connection");
-        }
+        if (PHP_SAPI == "cli") {
+            if (!$this->socket) {
+                throw new Exception\Connection(0, "Unable to read from closed connection");
+            }
 
-        $str = $this->socket->recv();
-        return $str;
+            $str = $this->socket->recv();
+            return $str;
+        } else {
+            return $this->readln();
+        }
     }
 
     /**
@@ -148,9 +173,29 @@ class Connection extends SocketFunctions implements Interfaces\Connection
      * @throws \xobotyi\beansclient\Exception\Connection
      * @throws \xobotyi\beansclient\Exception\Socket
      */
-    public function readln() :string
+    public function readln($length = null) :string
     {
-        return $this->read();
+        if (PHP_SAPI == "cli") {
+            return $this->read();
+        } else {
+            if (!$this->socket) {
+                throw new Exception\Connection(0, "Unable to read from closed connection");
+            }
+
+            $str = false;
+
+            while ($str === false) {
+                $str = isset($length)
+                    ? $this->fgets($this->socket, $length)
+                    : $this->fgets($this->socket);
+
+                if ($this->feof($this->socket)) {
+                    throw new Exception\Socket(sprintf("Socket closed by remote ({$this->host}:{$this->port})"));
+                }
+            }
+
+            return rtrim($str);
+        }
     }
 
     /**
@@ -163,22 +208,36 @@ class Connection extends SocketFunctions implements Interfaces\Connection
      */
     public function write(string $str) :void
     {
-        if (!$this->socket) {
-            throw new Exception\Connection(0, "Unable to write into closed connection");
-        }
+        if (PHP_SAPI == "cli") {
+            if (!$this->socket) {
+                throw new Exception\Connection(0, "Unable to write into closed connection");
+            }
 
-        try {
-            $send = $this->socket->send($str);
-        } catch (\Exception $e) {
-            $this->reConnection();
-            $send = $this->socket->send($str);
-        }
+            try {
+                $send = $this->socket->send($str);
+            } catch (\Exception $e) {
+                $this->reConnection();
+                $send = $this->socket->send($str);
+            }
 
-        if (! $send) {
-            $this->reConnection();
-            $send = $this->socket->send($str);
             if (! $send) {
-                throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
+                $this->reConnection();
+                $send = $this->socket->send($str);
+                if (! $send) {
+                    throw new Exception\Socket('beanstalk send fail: ' . $this->socket->errCode);
+                }
+            }
+        } else {
+            if (!$this->socket) {
+                throw new Exception\Connection(0, "Unable to write into closed connection");
+            }
+
+            for ($attempt = $written = $iterWritten = 0; $written < strlen($str); $written += $iterWritten) {
+                $iterWritten = $this->fwrite($this->socket, substr($str, $written));
+
+                if (++$attempt === self::SOCK_WRITE_RETRIES) {
+                    throw new Exception\Socket(sprintf("Failed to write data to socket after %u retries (%u:%u)", self::SOCK_WRITE_RETRIES, $this->host, $this->port));
+                }
             }
         }
     }
